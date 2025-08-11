@@ -1,19 +1,31 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from datetime import datetime, timedelta
-import time
+import os, time
 
 class OptionsChainScraper:
     @staticmethod
-    def init_driver(driver_path):
-        print(driver_path)
-        service = Service(executable_path=driver_path)
-        return webdriver.Chrome(service=service)
+    def init_driver(headless=True, use_chromium=False):
+        opts = Options()
+        if headless:
+            opts.add_argument("--headless=new")      # use "--headless" if "new" isn't supported
+        opts.add_argument("--disable-dev-shm-usage")
+        opts.add_argument("--window-size=1920,1080")
 
+        # If the process runs as root (cron/systemd), avoid sandbox errors:
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            opts.add_argument("--no-sandbox")
+
+        # Only if you’re using Chromium from apt instead of Google Chrome:
+        # if use_chromium:
+        #     opts.binary_location = "/usr/bin/chromium-browser"
+
+        service = Service()  # Selenium Manager handles chromedriver
+        return webdriver.Chrome(service=service, options=opts)
     @staticmethod
     def get_options_chain_summary(driver, table_id, ticker_price, option_type):
         table = driver.find_element(By.ID, table_id)
@@ -90,48 +102,45 @@ class OptionsChainScraper:
                 pruned_data['within_90_days'] = entry
                 max_open_interest_90_days = entry['total_open_interest']
         return pruned_data
-
+    
     @staticmethod
     def find_max_volumes():
-        url = 'https://www.stockninja.io/stocks/spy/options/'  # Replace with the actual URL
-        driver_path = "C:\\WebTools\\chromedriver.exe"  # Replace with the actual path to chromedriver
-        driver = OptionsChainScraper.init_driver(driver_path)
+        url = 'https://www.stockninja.io/stocks/spy/options/'
+        driver = OptionsChainScraper.init_driver(headless=True)
         driver.get(url)
-
+        
         wait = WebDriverWait(driver, 10)
         select_element = wait.until(EC.presence_of_element_located((By.ID, 'options-date')))
         select = Select(select_element)
-        options = select.options
-
+        
         data = []
         for i in range(16):
-            print(i)
-
-
             select_element = wait.until(EC.presence_of_element_located((By.ID, 'options-date')))
             select = Select(select_element)
             options = select.options
-
+            
             option = options[i]
             date = option.get_attribute('value')
-
+            
             select.select_by_index(i)
             time.sleep(3)
-
+            
             ticker_price = OptionsChainScraper.get_ticker_price(driver)
             max_pain = OptionsChainScraper.get_max_pain_value(driver)
-
-            calls_summary = OptionsChainScraper.get_options_chain_summary(driver, 'call-options-chain', ticker_price, 'call')
-            puts_summary = OptionsChainScraper.get_options_chain_summary(driver, 'put-options-chain', ticker_price, 'put')
+            
+            calls_summary = OptionsChainScraper.get_options_chain_summary(driver, 'call-options-chain', ticker_price,
+                                                                          'call')
+            puts_summary = OptionsChainScraper.get_options_chain_summary(driver, 'put-options-chain', ticker_price,
+                                                                         'put')
             if calls_summary['total_open_interest'] == 0 or puts_summary['total_open_interest'] == 0:
                 continue
-
+            
             expected_high = ticker_price + calls_summary['last_price_nearest_strike']
             expected_low = ticker_price - puts_summary['last_price_matching_strike']
             put_call_ratio = round(puts_summary['total_open_interest'] / calls_summary['total_open_interest'], 2)
             total_oi = puts_summary['total_open_interest'] + calls_summary['total_open_interest']
-
-            summary = {
+            
+            data.append({
                 'date': date,
                 'ticker_price': ticker_price,
                 'max_pain': max_pain,
@@ -141,19 +150,17 @@ class OptionsChainScraper:
                 'strike_with_max_oi': calls_summary['strike_with_max_oi'],
                 'put_call_ratio': put_call_ratio,
                 'total_oi': total_oi
-            }
-
-            data.append(summary)
-
+            })
+        
         driver.quit()
-
+        driver.quit()
+        
         pruned_data = OptionsChainScraper.prune_data(data)
-
-        # Prepare final labeled data
+        
         final_data = []
-        for period in ['within_7_days', 'within_30_days', 'within_90_days']:
-            if pruned_data[period]:
-                entry = pruned_data[period]
+        for key in ['within_7_days', 'within_30_days', 'within_90_days']:
+            entry = pruned_data.get(key)
+            if entry:
                 final_data.append({
                     'date': entry['date'],
                     'current_price': entry['ticker_price'],
@@ -175,6 +182,8 @@ class OptionsChainScraper:
                     'put_call_ratio': None,
                     'total_OI': None
                 })
+        
         return final_data
+
 
 
