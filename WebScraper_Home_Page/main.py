@@ -1,6 +1,6 @@
 
-from web_extraction import WebExtractor
-from mongo_handler import MongoHandler
+from .web_extraction import WebExtractor
+from .mongo_handler import MongoHandler
 
 
 if __name__ == "__main__":

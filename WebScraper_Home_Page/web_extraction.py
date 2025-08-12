@@ -1,8 +1,8 @@
-from insiders_extract import InsiderExtract
-from bonds import Bonds
-from sectors import Sectors
-from ratios import Ratios
-from options_scraper import OptionsChainScraper
+from .insiders_extract import InsiderExtract
+from .bonds import Bonds
+from .sectors import Sectors
+from .ratios import Ratios
+from .options_scraper import OptionsChainScraper
 from utils.utils import Utils
 class WebExtractor:
 
