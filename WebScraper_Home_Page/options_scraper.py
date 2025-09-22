@@ -39,7 +39,8 @@ class OptionsChainScraper:
         rows = table.find_elements(By.TAG_NAME, 'tr')[1:]
         for row in rows:
             cells = row.find_elements(By.TAG_NAME, 'td')
-            strike = float(cells[0].text.strip())
+            try: strike = float(cells[0].text.strip()); 
+            except ValueError: continue
             last_price = float(cells[4].text.strip())
             open_interest = int(cells[6].text.strip())
             open_interest_sum += open_interest
